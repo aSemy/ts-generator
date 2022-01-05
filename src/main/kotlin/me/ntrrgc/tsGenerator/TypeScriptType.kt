@@ -36,11 +36,13 @@ internal class TypeScriptType private constructor(private val types: List<String
     infix fun or(other: TypeScriptType): TypeScriptType {
         val combinedTypes = (this.types + other.types).distinct()
 
-        return TypeScriptType(if ("any" in combinedTypes) {
-            listOf("any")
-        } else {
-            combinedTypes
-        })
+        return TypeScriptType(
+            if ("any" in combinedTypes) {
+                listOf("any")
+            } else {
+                combinedTypes
+            }
+        )
     }
 
     fun formatWithParenthesis(): String {
@@ -53,5 +55,16 @@ internal class TypeScriptType private constructor(private val types: List<String
 
     fun formatWithoutParenthesis(): String {
         return types.joinToString(" | ")
+    }
+
+    /**
+     * > An index signature parameter type must be 'string', 'number', 'symbol', or a
+     * template literal type.
+     */
+    fun isValidIndexSignatureParameterType(): Boolean {
+        return when (formatWithoutParenthesis()) {
+            "string", "number" -> true
+            else               -> false
+        }
     }
 }
