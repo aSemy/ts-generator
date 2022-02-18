@@ -13,16 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
-    kotlin("jvm") version "1.6.10"
-    `java-library`
-
+    kotlin("multiplatform")
+    id("io.kotest.multiplatform")
     `maven-publish`
     id("me.qoomon.git-versioning") version "5.1.2"
-
-    jacoco
+//    jacoco // not easy to set up with KMP - migrate to Kover?
 }
 
 project.group = "me.ntrrgc"
@@ -40,48 +37,93 @@ gitVersioning.apply {
 val spekVersion = "2.0.17"
 val junitVersion = "5.8.2"
 val googleFindBugsVersion = "3.0.2"
+val kotestVersion = "5.1.0"
 
-dependencies {
-    implementation(kotlin("reflect"))
-
-    testImplementation(platform("org.junit:junit-bom:$junitVersion"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher") {
-        because("Only needed to run tests in a version of IntelliJ IDEA that bundles older versions")
-    }
-
-    testImplementation("org.spekframework.spek2:spek-dsl-jvm:$spekVersion")
-    testImplementation("org.spekframework.spek2:spek-runner-junit5:$spekVersion")
-
-    testImplementation("com.google.code.findbugs:jsr305:$googleFindBugsVersion")
-}
-
-java {
-    withJavadocJar()
-    withSourcesJar()
-}
+relocateKotlinJsStore()
 
 kotlin {
-    jvmToolchain {
-        (this as JavaToolchainSpec).languageVersion.set(JavaLanguageVersion.of(8))
-    }
-}
+    jvm {
+        compilations.all {
+            kotlinOptions.jvmTarget = "11"
+        }
+        withJava()
+        testRuns["test"].executionTask.configure {
+            useJUnitPlatform {
+                includeEngines("spek2")
+            }
+//            finalizedBy(tasks.jacocoTestReport)
+        }
+        jvmToolchain {
+            (this as JavaToolchainSpec).languageVersion.set(JavaLanguageVersion.of(11))
+        }
 
-tasks.withType<KotlinCompile>().configureEach {
-    kotlinOptions {
-        jvmTarget = "1.8"
-        apiVersion = "1.6"
-        languageVersion = "1.6"
-    }
-}
 
-tasks.withType<Test> {
-    useJUnitPlatform {
-        includeEngines("spek2")
     }
-}
-tasks.test {
-    finalizedBy(tasks.jacocoTestReport)
+    js(IR) {
+        binaries.executable()
+        browser()
+    }
+
+    nativeTarget { }
+
+    sourceSets {
+
+        all {
+            languageSettings.apply {
+                optIn("kotlin.RequiresOptIn")
+                optIn("kotlin.ExperimentalStdlibApi")
+                optIn("kotlin.time.ExperimentalTime")
+                optIn("kotlin.js.ExperimentalJsExport")
+            }
+        }
+
+        val commonMain by getting {
+            dependencies {
+                implementation(project.dependencies.platform(kotlin("bom")))
+            }
+        }
+        val commonTest by getting {
+            dependencies {
+                implementation(kotlin("test"))
+
+                implementation(project.dependencies.platform("io.kotest:kotest-bom:$kotestVersion"))
+                implementation("io.kotest:kotest-framework-engine")
+                implementation("io.kotest:kotest-assertions-core")
+                implementation("io.kotest:kotest-property")
+                implementation("io.kotest:kotest-assertions-json")
+            }
+        }
+        val jvmMain by getting {
+            dependencies {
+                implementation(kotlin("reflect"))
+                implementation(kotlin("stdlib-jdk8"))
+            }
+        }
+        val jvmTest by getting {
+            dependencies {
+                implementation(project.dependencies.platform("org.junit:junit-bom:$junitVersion"))
+                implementation("org.junit.jupiter:junit-jupiter")
+                runtimeOnly("org.junit.platform:junit-platform-launcher") {
+                    because("Only needed to run tests in a version of IntelliJ IDEA that bundles older versions")
+                }
+
+                implementation("org.spekframework.spek2:spek-dsl-jvm:$spekVersion")
+                implementation("org.spekframework.spek2:spek-runner-junit5:$spekVersion")
+
+                implementation("com.google.code.findbugs:jsr305:$googleFindBugsVersion")
+
+                implementation("io.kotest:kotest-runner-junit5")
+            }
+        }
+        val jsMain by getting
+        val jsTest by getting {
+            dependencies {
+                implementation(kotlin("test-js"))
+            }
+        }
+        val nativeMain by getting
+        val nativeTest by getting
+    }
 }
 
 tasks.wrapper {
